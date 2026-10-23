@@ -11,5 +11,7 @@ __version__ = '0.1.0'
 
 from .atoms import Atoms
 from .cell import Cell
+from .cif import read_cif
+from .surface import surface
 
-__all__ = ['Atoms', 'Cell']
+__all__ = ['Atoms', 'Cell', 'read_cif', 'surface']

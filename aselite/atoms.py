@@ -297,6 +297,280 @@ class Atoms:
         import copy
         return copy.deepcopy(self)
 
+    def get_angle(self, i: int, j: int, k: int, mic: bool = False) -> float:
+        """计算键角 i-j-k (弧度)
+
+        Args:
+            i, j, k: 原子索引，j 为顶点
+            mic: 是否使用最小镜像约定
+
+        Returns:
+            键角 [0, π]
+        """
+        from .geometry import get_angle
+
+        v1 = self._positions[i] - self._positions[j]
+        v2 = self._positions[k] - self._positions[j]
+
+        if mic and self._pbc.any():
+            v1 = self._cell.mic(v1)
+            v2 = self._cell.mic(v2)
+
+        return get_angle(v1, v2)
+
+    def get_angles(self, indices: np.ndarray, mic: bool = False) -> np.ndarray:
+        """批量计算键角（向量化）
+
+        Args:
+            indices: (n, 3) 数组，每行为 [i, j, k]
+            mic: 是否使用最小镜像约定
+
+        Returns:
+            (n,) 键角数组
+        """
+        from .geometry import get_angles_batch
+
+        indices = np.asarray(indices)
+        if indices.ndim != 2 or indices.shape[1] != 3:
+            raise ValueError("indices must be (n, 3) array")
+
+        # 向量化提取: v1 = pos[i] - pos[j], v2 = pos[k] - pos[j]
+        v1s = self._positions[indices[:, 0]] - self._positions[indices[:, 1]]
+        v2s = self._positions[indices[:, 2]] - self._positions[indices[:, 1]]
+
+        if mic and self._pbc.any():
+            v1s = self._cell.mic(v1s)
+            v2s = self._cell.mic(v2s)
+
+        return get_angles_batch(v1s, v2s)
+
+    def get_dihedral(self, i: int, j: int, k: int, l: int, mic: bool = False) -> float:
+        """计算二面角 i-j-k-l (弧度)
+
+        Args:
+            i, j, k, l: 原子索引，定义连续四点
+            mic: 是否使用最小镜像约定
+
+        Returns:
+            二面角 [-π, π]
+        """
+        from .geometry import get_dihedral
+
+        v1 = self._positions[j] - self._positions[i]
+        v2 = self._positions[k] - self._positions[j]
+        v3 = self._positions[l] - self._positions[k]
+
+        if mic and self._pbc.any():
+            v1 = self._cell.mic(v1)
+            v2 = self._cell.mic(v2)
+            v3 = self._cell.mic(v3)
+
+        return get_dihedral(v1, v2, v3)
+
+    def get_dihedrals(self, indices: np.ndarray, mic: bool = False) -> np.ndarray:
+        """批量计算二面角（向量化）
+
+        Args:
+            indices: (n, 4) 数组，每行为 [i, j, k, l]
+            mic: 是否使用最小镜像约定
+
+        Returns:
+            (n,) 二面角数组
+        """
+        from .geometry import get_dihedrals_batch
+
+        indices = np.asarray(indices)
+        if indices.ndim != 2 or indices.shape[1] != 4:
+            raise ValueError("indices must be (n, 4) array")
+
+        v1s = self._positions[indices[:, 1]] - self._positions[indices[:, 0]]
+        v2s = self._positions[indices[:, 2]] - self._positions[indices[:, 1]]
+        v3s = self._positions[indices[:, 3]] - self._positions[indices[:, 2]]
+
+        if mic and self._pbc.any():
+            v1s = self._cell.mic(v1s)
+            v2s = self._cell.mic(v2s)
+            v3s = self._cell.mic(v3s)
+
+        return get_dihedrals_batch(v1s, v2s, v3s)
+
+    def set_angle(self, i: int, j: int, k: int, angle: float,
+                  indices: List[int] = None, mic: bool = False):
+        """设置键角 i-j-k，旋转 k 或指定的原子组
+
+        Args:
+            i, j, k: 原子索引，j 为顶点
+            angle: 目标键角（弧度）
+            indices: 需要随 k 旋转的原子索引列表（默认只旋转 k）
+            mic: 是否使用最小镜像约定
+        """
+        current_angle = self.get_angle(i, j, k, mic=mic)
+        delta = angle - current_angle
+
+        # 旋转轴：v1 × v2
+        v1 = self._positions[i] - self._positions[j]
+        v2 = self._positions[k] - self._positions[j]
+        if mic and self._pbc.any():
+            v1 = self._cell.mic(v1)
+            v2 = self._cell.mic(v2)
+
+        axis = np.cross(v1, v2)
+        if np.linalg.norm(axis) < 1e-10:
+            return  # 三点共线，无法旋转
+
+        if indices is None:
+            indices = [k]
+
+        from .geometry import rotation_matrix
+        R = rotation_matrix(delta, axis)
+        center = self._positions[j]
+
+        for idx in indices:
+            self._positions[idx] = (self._positions[idx] - center) @ R.T + center
+
+    def set_dihedral(self, i: int, j: int, k: int, l: int, angle: float,
+                     indices: List[int] = None, mic: bool = False):
+        """设置二面角 i-j-k-l，旋转 l 或指定的原子组
+
+        Args:
+            i, j, k, l: 原子索引
+            angle: 目标二面角（弧度）
+            indices: 需要随 l 旋转的原子索引列表（默认只旋转 l）
+            mic: 是否使用最小镜像约定
+        """
+        current_angle = self.get_dihedral(i, j, k, l, mic=mic)
+        delta = angle - current_angle
+
+        # 旋转轴：v2 = k - j
+        v2 = self._positions[k] - self._positions[j]
+        if mic and self._pbc.any():
+            v2 = self._cell.mic(v2)
+
+        if indices is None:
+            indices = [l]
+
+        from .geometry import rotation_matrix
+        R = rotation_matrix(delta, v2)
+        center = self._positions[k]
+
+        for idx in indices:
+            self._positions[idx] = (self._positions[idx] - center) @ R.T + center
+
+    def make_supercell(self, P: np.ndarray) -> 'Atoms':
+        """创建超胞
+
+        Args:
+            P: (3, 3) 变换矩阵，或 (3,) 对角元素
+
+        Returns:
+            新的 Atoms 对象
+        """
+        P = np.asarray(P)
+        if P.ndim == 1:
+            P = np.diag(P)
+        if P.shape != (3, 3):
+            raise ValueError("P must be (3, 3) or (3,)")
+
+        # 新晶格
+        new_cell = self._cell.array @ P.T
+
+        # 遍历所有平移
+        ranges = [range(int(np.ceil(P[i, :].max()))) for i in range(3)]
+        n_images = np.prod([len(r) for r in ranges])
+
+        new_positions = np.empty((n_images * len(self), 3))
+        new_symbols = []
+        new_masses = np.empty(n_images * len(self))
+
+        idx = 0
+        for i0 in ranges[0]:
+            for i1 in ranges[1]:
+                for i2 in ranges[2]:
+                    offset = np.array([i0, i1, i2]) @ self._cell.array
+                    new_positions[idx:idx+len(self)] = self._positions + offset
+                    new_symbols.extend(self._symbols)
+                    new_masses[idx:idx+len(self)] = self.masses
+                    idx += len(self)
+
+        # 筛选在新晶胞内的原子
+        from .cell import Cell
+        new_cell_obj = Cell(new_cell)
+        scaled = new_cell_obj.scaled_positions(new_positions)
+
+        # 保留 [0, 1) 范围内的原子
+        mask = np.all((scaled >= -1e-10) & (scaled < 1 - 1e-10), axis=1)
+
+        return Atoms(
+            symbols=[new_symbols[i] for i, m in enumerate(mask) if m],
+            positions=new_positions[mask],
+            cell=new_cell,
+            pbc=self._pbc,
+            masses=new_masses[mask]
+        )
+
+    def substitute(self, indices: List[int], symbol: str):
+        """替换指定原子的元素
+
+        Args:
+            indices: 原子索引列表
+            symbol: 新元素符号
+        """
+        from .data import atomic_masses
+
+        for i in indices:
+            self._symbols[i] = symbol
+            if self._masses is not None:
+                self._masses[i] = atomic_masses.get(symbol, 1.0)
+
+    def substitute_random(self, old_symbol: str, new_symbol: str,
+                         fraction: float, seed: int = None):
+        """随机替换指定比例的某种元素
+
+        Args:
+            old_symbol: 被替换的元素
+            new_symbol: 新元素
+            fraction: 替换比例 [0, 1]
+            seed: 随机种子
+        """
+        indices = [i for i, s in enumerate(self._symbols) if s == old_symbol]
+        n_substitute = int(len(indices) * fraction)
+
+        if seed is not None:
+            np.random.seed(seed)
+
+        selected = np.random.choice(indices, size=n_substitute, replace=False)
+        self.substitute(selected.tolist(), new_symbol)
+
+    def add_adsorbate(self, adsorbate: 'Atoms', position: np.ndarray,
+                     height: float = 2.0, offset: np.ndarray = None):
+        """在表面添加吸附物
+
+        Args:
+            adsorbate: 吸附物结构
+            position: 吸附位置（表面坐标）
+            height: 表面法向高度 (Å)
+            offset: 额外偏移（默认为 [0, 0, height]）
+        """
+        if offset is None:
+            offset = np.array([0.0, 0.0, height])
+        else:
+            offset = np.asarray(offset)
+
+        # 吸附物质心
+        ads_com = adsorbate.get_center_of_mass()
+
+        # 新位置
+        new_pos = adsorbate._positions - ads_com + np.asarray(position) + offset
+
+        # 合并
+        self._positions = np.vstack([self._positions, new_pos])
+        self._symbols = np.concatenate([self._symbols, adsorbate._symbols])
+        if self._masses is not None and adsorbate._masses is not None:
+            self._masses = np.concatenate([self._masses, adsorbate.masses])
+        elif self._masses is not None:
+            # 需要为新原子添加质量
+            self._masses = np.concatenate([self._masses, adsorbate.masses])
+
     def __getitem__(self, index) -> 'Atoms':
         """切片操作"""
         if isinstance(index, int):

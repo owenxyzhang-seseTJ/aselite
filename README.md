@@ -10,13 +10,16 @@
 |------|------|
 | CIF 解析 | 比 ASE 快 **30–100 倍**（差异随原子数增长） |
 | 全距离矩阵 | 比 ASE 快 **2.3 倍** |
+| 键角计算（批量） | 比 ASE 快 **16 倍** |
+| 二面角计算（批量） | 比 ASE 快 **130 倍** |
 | 质心 / repeat | 与 ASE 同量级 |
 | 导入时间 | 约 32 ms，与 ASE 基本持平 |
 
-加速来自两个具体原因，不是"写得更好"这类空话：
+加速来自具体原因，不是"写得更好"这类空话：
 
 - **CIF**：ASE 的 `equivalent_sites()` 是 O(N²) 的 Python 双层循环，即使 P1 文件也逐原子比对，占其总耗时 95%；本库用一次向量化 `np.unique` 去重，O(N log N)。
 - **距离矩阵**：ASE 先算上三角再散射回 N×N，多出索引数组与两次全矩阵写入；本库一次完整广播。
+- **键角/二面角批量计算**：ASE 逐个循环调用，本库用 NumPy 广播一次处理所有角度。
 
 剖析过程与可复现代码见 [PERFORMANCE.md](PERFORMANCE.md)。
 
@@ -85,6 +88,20 @@ atoms.get_all_distances(mic=True)
 atoms.get_chemical_formula()
 atoms.get_center_of_mass()
 
+# 几何操作
+atoms.get_angle(0, 1, 2)                      # 键角
+atoms.get_angles([[0,1,2], [2,3,4]])          # 批量键角（向量化）
+atoms.get_dihedral(0, 1, 2, 3)                # 二面角
+atoms.get_dihedrals([[0,1,2,3], [3,4,5,6]])   # 批量二面角
+atoms.set_angle(0, 1, 2, np.radians(120))     # 设置键角
+atoms.set_dihedral(0, 1, 2, 3, np.pi/2)       # 设置二面角
+
+# 晶体结构操作
+atoms.make_supercell([2, 2, 2])               # 超胞
+atoms.substitute([0, 2], 'N')                 # 元素替换
+atoms.substitute_random('C', 'N', 0.1)        # 随机替换
+atoms.add_adsorbate(co_molecule, [1,1,0], height=2.0)  # 吸附物
+
 atoms.translate([1, 1, 1])
 atoms.rotate(1.57, 'z')
 atoms.center(vacuum=5.0)
@@ -94,6 +111,8 @@ atoms + other          # 合并
 ```
 
 读写格式：CIF、VASP（POSCAR/CONTCAR）、XYZ、PDB。
+
+更多示例见 [`examples/`](examples/)。
 
 ## 测试
 
