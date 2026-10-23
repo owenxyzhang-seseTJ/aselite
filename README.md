@@ -8,12 +8,17 @@
 
 | 场景 | 结果 |
 |------|------|
-| CIF 解析 | 比 ASE 快 **30–100 倍** |
+| CIF 解析 | 比 ASE 快 **30–100 倍**（差异随原子数增长） |
 | 全距离矩阵 | 比 ASE 快 **2.3 倍** |
 | 质心 / repeat | 与 ASE 同量级 |
 | 导入时间 | 约 32 ms，与 ASE 基本持平 |
 
-数字由 `benchmarks/compare_ase.py` 实测，详见 [PERFORMANCE.md](PERFORMANCE.md)。
+加速来自两个具体原因，不是"写得更好"这类空话：
+
+- **CIF**：ASE 的 `equivalent_sites()` 是 O(N²) 的 Python 双层循环，即使 P1 文件也逐原子比对，占其总耗时 95%；本库用一次向量化 `np.unique` 去重，O(N log N)。
+- **距离矩阵**：ASE 先算上三角再散射回 N×N，多出索引数组与两次全矩阵写入；本库一次完整广播。
+
+剖析过程与可复现代码见 [PERFORMANCE.md](PERFORMANCE.md)。
 
 ## CIF 容错能力
 
