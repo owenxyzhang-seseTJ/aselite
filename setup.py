@@ -9,7 +9,7 @@ long_description = (ROOT / 'README.md').read_text(encoding='utf-8')
 
 setup(
     name='aselite',
-    version='0.1.0',
+    version='0.2.0',
     description='轻量原子模拟环境库：容错 CIF 解析、向量化几何计算，仅依赖 NumPy',
     long_description=long_description,
     long_description_content_type='text/markdown',

@@ -7,7 +7,7 @@
 - geometry: 几何操作
 """
 
-__version__ = '0.1.0'
+__version__ = '0.2.0'
 
 from .atoms import Atoms
 from .cell import Cell

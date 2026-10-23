@@ -23,6 +23,17 @@
 
 剖析过程与可复现代码见 [PERFORMANCE.md](PERFORMANCE.md)。
 
+## 更新日志
+
+**0.2.0** — 几何与晶体结构操作
+
+- 键角/二面角：`get_angle(s)`、`get_dihedral(s)`，批量版本向量化，比 ASE 快 16× / 132×
+- 逆运动学：`set_angle()`、`set_dihedral()`
+- 晶体操作：`make_supercell()`、`substitute()`、`substitute_random()`、`add_adsorbate()`
+- 表面生成：`surface(atoms, (h, k, l), layers, vacuum)`
+
+**0.1.0** — 首个版本：容错 CIF 解析、向量化距离计算、VASP/XYZ/PDB 读写
+
 ## CIF 容错能力
 
 真实世界的 CIF 经常不规范。本库的解析器按 CIF 1.1 词法规范实现，并刻意容忍下列缺陷（均有测试覆盖，见 `tests/test_cif.py`）：
