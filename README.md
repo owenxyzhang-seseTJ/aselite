@@ -30,10 +30,17 @@
 
 **不推断**文件未写出的对称操作。只给空间群名称、不给操作列表的文件，本库不会自动补全。
 
-## 快速开始
+## 安装
 
 ```bash
-pip install numpy
+pip install aselite
+```
+
+从源码安装：
+
+```bash
+git clone https://github.com/owenxyzhang-seseTJ/aselite.git
+cd aselite && pip install -e .
 ```
 
 ```python
