@@ -1,0 +1,15 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+.pytest_cache/
+.DS_Store
+
+# 示例与测试产生的文件
+co2.xyz
+cu_test.*
+diamond.vasp
+test.xyz
